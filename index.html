@@ -1,0 +1,1199 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="stylesheet" href="css/leaflet.css">
+    <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+    <link rel="stylesheet" href="css/qgis2web.css">
+    <link rel="stylesheet" href="css/fontawesome-all.min.css">
+    <link rel="stylesheet" href="css/leaflet-search.css">
+    <link rel="stylesheet" href="css/leaflet-control-geocoder.Geocoder.css">
+    <style>
+        html,
+        body,
+        #map {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+
+        .header {
+            background-color: #4A6786;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .menu {
+            display: flex;
+            gap: 10px;
+        }
+
+        .menu a {
+            padding: 10px;
+            background-color: #2C4A66;
+            margin: 5px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            color: white;
+            display: inline-block;
+        }
+
+        .menu a.active {
+            background-color: white;
+            color: black;
+        }
+    </style>
+    <title></title>
+</head>
+
+<body>
+    <!-- <div id="map">
+    </div> -->
+    <div class="header">
+        <div>Dashboard Pemetaan Indeks Kerentanan Tuberkulosis (TB) di Provinsi Daerah Istimewa Yogyakarta</div>
+        <div class="menu">
+            <a href="index.html" class="active">Indeks Kerentanan TB</a>
+            <a href="Web Estimasi/index.html">Estimasi Prevalensi TB</a>
+        </div>
+    </div>
+    <div id="map" style="width: 100%; height: 90%;"></div>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/qgis2web_expressions.js"></script>
+    <script src="js/leaflet.js"></script>
+    <script src="js/L.Control.Layers.Tree.min.js"></script>
+    <script src="js/leaflet.rotatedMarker.js"></script>
+    <script src="js/leaflet.pattern.js"></script>
+    <script src="js/leaflet-hash.js"></script>
+    <script src="js/Autolinker.min.js"></script>
+    <script src="js/rbush.min.js"></script>
+    <script src="js/labelgun.min.js"></script>
+    <script src="js/labels.js"></script>
+    <script src="js/leaflet-control-geocoder.Geocoder.js"></script>
+    <script src="js/leaflet-search.js"></script>
+    <script src="data/RSTVIIndeksKerentananTB2023_1.js"></script>
+    <script src="data/RSTVIIndeksKerentananTB2022_2.js"></script>
+    <script src="data/RSTVIIndeksKerentananTB2021_3.js"></script>
+    <script src="data/RSTVIIndeksKerentananTB2020_4.js"></script>
+    <script src="data/RSTVIIndeksKerentananTB2019_5.js"></script>
+    <script src="data/RSTVIIndeksKerentananTB2018_6.js"></script>
+    <script src="data/yogyakarta_7.js"></script>
+    <script>
+        var highlightLayer;
+        function highlightFeature(e) {
+            highlightLayer = e.target;
+
+            if (e.target.feature.geometry.type === 'LineString' || e.target.feature.geometry.type === 'MultiLineString') {
+                highlightLayer.setStyle({
+                    color: '#ffff00',
+                });
+            } else {
+                highlightLayer.setStyle({
+                    fillColor: '#ffff00',
+                    fillOpacity: 1
+                });
+            }
+        }
+        var map = L.map('map', {
+            zoomControl: false, maxZoom: 28, minZoom: 1
+        }).fitBounds([[-8.12, 110.2], [-7.5874, 110.75]]);
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        var autolinker = new Autolinker({ truncate: { length: 30, location: 'smart' } });
+        // remove popup's row if "visible-with-data"
+        function removeEmptyRowsFromPopupContent(content, feature) {
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            var rows = tempDiv.querySelectorAll('tr');
+            for (var i = 0; i < rows.length; i++) {
+                var td = rows[i].querySelector('td.visible-with-data');
+                var key = td ? td.id : '';
+                if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                    rows[i].parentNode.removeChild(rows[i]);
+                }
+            }
+            return tempDiv.innerHTML;
+        }
+        // add class to format popup if it contains media
+        function addClassToPopupIfMedia(content, popup) {
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            if (tempDiv.querySelector('td img')) {
+                popup._contentNode.classList.add('media');
+                // Delay to force the redraw
+                setTimeout(function () {
+                    popup.update();
+                }, 10);
+            } else {
+                popup._contentNode.classList.remove('media');
+            }
+        }
+        var zoomControl = L.control.zoom({
+            position: 'topleft'
+        }).addTo(map);
+        var bounds_group = new L.featureGroup([]);
+        function setBounds() {
+        }
+        map.createPane('pane_GoogleSatellite_0');
+        map.getPane('pane_GoogleSatellite_0').style.zIndex = 400;
+        var layer_GoogleSatellite_0 = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+            pane: 'pane_GoogleSatellite_0',
+            opacity: 1.0,
+            attribution: '<a href="https://www.google.at/permissions/geoguidelines/attr-guide.html">Map data ©2015 Google</a>',
+            minZoom: 1,
+            maxZoom: 28,
+            minNativeZoom: 0,
+            maxNativeZoom: 20
+        });
+        layer_GoogleSatellite_0;
+        map.addLayer(layer_GoogleSatellite_0);
+        function pop_RSTVIIndeksKerentananTB2023_1(feature, layer) {
+            layer.on({
+                mouseout: function (e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">id</th>\
+                        <td class="visible-with-data" id="id">' + (feature.properties['id'] !== null ? autolinker.link(String(feature.properties['id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">kabkot</th>\
+                        <td class="visible-with-data" id="kabkot">' + (feature.properties['kabkot'] !== null ? autolinker.link(String(feature.properties['kabkot']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">kecamatan</th>\
+                        <td class="visible-with-data" id="kecamatan">' + (feature.properties['kecamatan'] !== null ? autolinker.link(String(feature.properties['kecamatan']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">lst</th>\
+                        <td class="visible-with-data" id="lst">' + (feature.properties['lst'] !== null ? autolinker.link(String(feature.properties['lst']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">sentinel_bui</th>\
+                        <td class="visible-with-data" id="sentinel_bui">' + (feature.properties['sentinel_bui'] !== null ? autolinker.link(String(feature.properties['sentinel_bui']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">sentinel_ndvi</th>\
+                        <td class="visible-with-data" id="sentinel_ndvi">' + (feature.properties['sentinel_ndvi'] !== null ? autolinker.link(String(feature.properties['sentinel_ndvi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">sentinel_ndwi</th>\
+                        <td class="visible-with-data" id="sentinel_ndwi">' + (feature.properties['sentinel_ndwi'] !== null ? autolinker.link(String(feature.properties['sentinel_ndwi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">co</th>\
+                        <td class="visible-with-data" id="co">' + (feature.properties['co'] !== null ? autolinker.link(String(feature.properties['co']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">ntl</th>\
+                        <td class="visible-with-data" id="ntl">' + (feature.properties['ntl'] !== null ? autolinker.link(String(feature.properties['ntl']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">slope</th>\
+                        <td class="visible-with-data" id="slope">' + (feature.properties['slope'] !== null ? autolinker.link(String(feature.properties['slope']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">poi_average_distance</th>\
+                        <td class="visible-with-data" id="poi_average_distance">' + (feature.properties['poi_average_distance'] !== null ? autolinker.link(String(feature.properties['poi_average_distance']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">rasio_jml_faskes_per_luas_wilayah</th>\
+                        <td class="visible-with-data" id="rasio_jml_faskes_per_luas_wilayah">' + (feature.properties['rasio_jml_faskes_per_luas_wilayah'] !== null ? autolinker.link(String(feature.properties['rasio_jml_faskes_per_luas_wilayah']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">rasio_jml_faskes_per_10.000penduduk</th>\
+                        <td class="visible-with-data" id="rasio_jml_faskes_per_10.000penduduk">' + (feature.properties['rasio_jml_faskes_per_10.000penduduk'] !== null ? autolinker.link(String(feature.properties['rasio_jml_faskes_per_10.000penduduk']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">pdrb_rwi</th>\
+                        <td class="visible-with-data" id="pdrb_rwi">' + (feature.properties['pdrb_rwi'] !== null ? autolinker.link(String(feature.properties['pdrb_rwi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">kepadatan_penduduk</th>\
+                        <td class="visible-with-data" id="kepadatan_penduduk">' + (feature.properties['kepadatan_penduduk'] !== null ? autolinker.link(String(feature.properties['kepadatan_penduduk']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Indeks</th>\
+                        <td class="visible-with-data" id="Indeks">' + (feature.properties['Indeks'] !== null ? autolinker.link(String(feature.properties['Indeks']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+            layer.on('popupopen', function (e) {
+                addClassToPopupIfMedia(content, e.popup);
+            });
+            layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_RSTVIIndeksKerentananTB2023_1_0(feature) {
+            if (feature.properties['Indeks'] >= 0.000000 && feature.properties['Indeks'] <= 0.200000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2023_1',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(26,150,65,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.200000 && feature.properties['Indeks'] <= 0.400000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2023_1',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(166,217,106,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.400000 && feature.properties['Indeks'] <= 0.600000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2023_1',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(255,255,192,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.600000 && feature.properties['Indeks'] <= 0.800000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2023_1',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(253,174,97,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.800000 && feature.properties['Indeks'] <= 1.000000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2023_1',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(215,25,28,1.0)',
+                    interactive: true,
+                }
+            }
+        }
+        map.createPane('pane_RSTVIIndeksKerentananTB2023_1');
+        map.getPane('pane_RSTVIIndeksKerentananTB2023_1').style.zIndex = 401;
+        map.getPane('pane_RSTVIIndeksKerentananTB2023_1').style['mix-blend-mode'] = 'normal';
+        var layer_RSTVIIndeksKerentananTB2023_1 = new L.geoJson(json_RSTVIIndeksKerentananTB2023_1, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_RSTVIIndeksKerentananTB2023_1',
+            layerName: 'layer_RSTVIIndeksKerentananTB2023_1',
+            pane: 'pane_RSTVIIndeksKerentananTB2023_1',
+            onEachFeature: pop_RSTVIIndeksKerentananTB2023_1,
+            style: style_RSTVIIndeksKerentananTB2023_1_0,
+        });
+        bounds_group.addLayer(layer_RSTVIIndeksKerentananTB2023_1);
+        map.addLayer(layer_RSTVIIndeksKerentananTB2023_1);
+        function pop_RSTVIIndeksKerentananTB2022_2(feature, layer) {
+            layer.on({
+                mouseout: function (e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">id</th>\
+                        <td class="visible-with-data" id="id">' + (feature.properties['id'] !== null ? autolinker.link(String(feature.properties['id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">kabkot</th>\
+                        <td class="visible-with-data" id="kabkot">' + (feature.properties['kabkot'] !== null ? autolinker.link(String(feature.properties['kabkot']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">kecamatan</th>\
+                        <td class="visible-with-data" id="kecamatan">' + (feature.properties['kecamatan'] !== null ? autolinker.link(String(feature.properties['kecamatan']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">lst</th>\
+                        <td class="visible-with-data" id="lst">' + (feature.properties['lst'] !== null ? autolinker.link(String(feature.properties['lst']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">sentinel_bui</th>\
+                        <td class="visible-with-data" id="sentinel_bui">' + (feature.properties['sentinel_bui'] !== null ? autolinker.link(String(feature.properties['sentinel_bui']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">sentinel_ndvi</th>\
+                        <td class="visible-with-data" id="sentinel_ndvi">' + (feature.properties['sentinel_ndvi'] !== null ? autolinker.link(String(feature.properties['sentinel_ndvi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">sentinel_ndwi</th>\
+                        <td class="visible-with-data" id="sentinel_ndwi">' + (feature.properties['sentinel_ndwi'] !== null ? autolinker.link(String(feature.properties['sentinel_ndwi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">co</th>\
+                        <td class="visible-with-data" id="co">' + (feature.properties['co'] !== null ? autolinker.link(String(feature.properties['co']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">ntl</th>\
+                        <td class="visible-with-data" id="ntl">' + (feature.properties['ntl'] !== null ? autolinker.link(String(feature.properties['ntl']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">slope</th>\
+                        <td class="visible-with-data" id="slope">' + (feature.properties['slope'] !== null ? autolinker.link(String(feature.properties['slope']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">poi_average_distance</th>\
+                        <td class="visible-with-data" id="poi_average_distance">' + (feature.properties['poi_average_distance'] !== null ? autolinker.link(String(feature.properties['poi_average_distance']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">rasio_jml_faskes_per_luas_wilayah</th>\
+                        <td class="visible-with-data" id="rasio_jml_faskes_per_luas_wilayah">' + (feature.properties['rasio_jml_faskes_per_luas_wilayah'] !== null ? autolinker.link(String(feature.properties['rasio_jml_faskes_per_luas_wilayah']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">rasio_jml_faskes_per_10.000penduduk</th>\
+                        <td class="visible-with-data" id="rasio_jml_faskes_per_10.000penduduk">' + (feature.properties['rasio_jml_faskes_per_10.000penduduk'] !== null ? autolinker.link(String(feature.properties['rasio_jml_faskes_per_10.000penduduk']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">pdrb_rwi</th>\
+                        <td class="visible-with-data" id="pdrb_rwi">' + (feature.properties['pdrb_rwi'] !== null ? autolinker.link(String(feature.properties['pdrb_rwi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">kepadatan_penduduk</th>\
+                        <td class="visible-with-data" id="kepadatan_penduduk">' + (feature.properties['kepadatan_penduduk'] !== null ? autolinker.link(String(feature.properties['kepadatan_penduduk']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Indeks</th>\
+                        <td class="visible-with-data" id="Indeks">' + (feature.properties['Indeks'] !== null ? autolinker.link(String(feature.properties['Indeks']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+            layer.on('popupopen', function (e) {
+                addClassToPopupIfMedia(content, e.popup);
+            });
+            layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_RSTVIIndeksKerentananTB2022_2_0(feature) {
+            if (feature.properties['Indeks'] >= 0.000000 && feature.properties['Indeks'] <= 0.200000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2022_2',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(26,150,65,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.200000 && feature.properties['Indeks'] <= 0.400000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2022_2',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(166,217,106,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.400000 && feature.properties['Indeks'] <= 0.600000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2022_2',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(255,255,192,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.600000 && feature.properties['Indeks'] <= 0.800000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2022_2',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(253,174,97,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.800000 && feature.properties['Indeks'] <= 1.000000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2022_2',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(215,25,28,1.0)',
+                    interactive: true,
+                }
+            }
+        }
+        map.createPane('pane_RSTVIIndeksKerentananTB2022_2');
+        map.getPane('pane_RSTVIIndeksKerentananTB2022_2').style.zIndex = 402;
+        map.getPane('pane_RSTVIIndeksKerentananTB2022_2').style['mix-blend-mode'] = 'normal';
+        var layer_RSTVIIndeksKerentananTB2022_2 = new L.geoJson(json_RSTVIIndeksKerentananTB2022_2, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_RSTVIIndeksKerentananTB2022_2',
+            layerName: 'layer_RSTVIIndeksKerentananTB2022_2',
+            pane: 'pane_RSTVIIndeksKerentananTB2022_2',
+            onEachFeature: pop_RSTVIIndeksKerentananTB2022_2,
+            style: style_RSTVIIndeksKerentananTB2022_2_0,
+        });
+        bounds_group.addLayer(layer_RSTVIIndeksKerentananTB2022_2);
+        map.addLayer(layer_RSTVIIndeksKerentananTB2022_2);
+        function pop_RSTVIIndeksKerentananTB2021_3(feature, layer) {
+            layer.on({
+                mouseout: function (e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">id</th>\
+                        <td class="visible-with-data" id="id">' + (feature.properties['id'] !== null ? autolinker.link(String(feature.properties['id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">kabkot</th>\
+                        <td class="visible-with-data" id="kabkot">' + (feature.properties['kabkot'] !== null ? autolinker.link(String(feature.properties['kabkot']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">kecamatan</th>\
+                        <td class="visible-with-data" id="kecamatan">' + (feature.properties['kecamatan'] !== null ? autolinker.link(String(feature.properties['kecamatan']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">lst</th>\
+                        <td class="visible-with-data" id="lst">' + (feature.properties['lst'] !== null ? autolinker.link(String(feature.properties['lst']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">sentinel_bui</th>\
+                        <td class="visible-with-data" id="sentinel_bui">' + (feature.properties['sentinel_bui'] !== null ? autolinker.link(String(feature.properties['sentinel_bui']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">sentinel_ndvi</th>\
+                        <td class="visible-with-data" id="sentinel_ndvi">' + (feature.properties['sentinel_ndvi'] !== null ? autolinker.link(String(feature.properties['sentinel_ndvi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">sentinel_ndwi</th>\
+                        <td class="visible-with-data" id="sentinel_ndwi">' + (feature.properties['sentinel_ndwi'] !== null ? autolinker.link(String(feature.properties['sentinel_ndwi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">co</th>\
+                        <td class="visible-with-data" id="co">' + (feature.properties['co'] !== null ? autolinker.link(String(feature.properties['co']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">ntl</th>\
+                        <td class="visible-with-data" id="ntl">' + (feature.properties['ntl'] !== null ? autolinker.link(String(feature.properties['ntl']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">slope</th>\
+                        <td class="visible-with-data" id="slope">' + (feature.properties['slope'] !== null ? autolinker.link(String(feature.properties['slope']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">poi_average_distance</th>\
+                        <td class="visible-with-data" id="poi_average_distance">' + (feature.properties['poi_average_distance'] !== null ? autolinker.link(String(feature.properties['poi_average_distance']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">rasio_jml_faskes_per_luas_wilayah</th>\
+                        <td class="visible-with-data" id="rasio_jml_faskes_per_luas_wilayah">' + (feature.properties['rasio_jml_faskes_per_luas_wilayah'] !== null ? autolinker.link(String(feature.properties['rasio_jml_faskes_per_luas_wilayah']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">rasio_jml_faskes_per_10.000penduduk</th>\
+                        <td class="visible-with-data" id="rasio_jml_faskes_per_10.000penduduk">' + (feature.properties['rasio_jml_faskes_per_10.000penduduk'] !== null ? autolinker.link(String(feature.properties['rasio_jml_faskes_per_10.000penduduk']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">pdrb_rwi</th>\
+                        <td class="visible-with-data" id="pdrb_rwi">' + (feature.properties['pdrb_rwi'] !== null ? autolinker.link(String(feature.properties['pdrb_rwi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">kepadatan_penduduk</th>\
+                        <td class="visible-with-data" id="kepadatan_penduduk">' + (feature.properties['kepadatan_penduduk'] !== null ? autolinker.link(String(feature.properties['kepadatan_penduduk']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Indeks</th>\
+                        <td class="visible-with-data" id="Indeks">' + (feature.properties['Indeks'] !== null ? autolinker.link(String(feature.properties['Indeks']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+            layer.on('popupopen', function (e) {
+                addClassToPopupIfMedia(content, e.popup);
+            });
+            layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_RSTVIIndeksKerentananTB2021_3_0(feature) {
+            if (feature.properties['Indeks'] >= 0.000000 && feature.properties['Indeks'] <= 0.200000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2021_3',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(26,150,65,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.200000 && feature.properties['Indeks'] <= 0.400000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2021_3',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(166,217,106,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.400000 && feature.properties['Indeks'] <= 0.600000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2021_3',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(255,255,192,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.600000 && feature.properties['Indeks'] <= 0.800000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2021_3',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(253,174,97,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.800000 && feature.properties['Indeks'] <= 1.000000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2021_3',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(215,25,28,1.0)',
+                    interactive: true,
+                }
+            }
+        }
+        map.createPane('pane_RSTVIIndeksKerentananTB2021_3');
+        map.getPane('pane_RSTVIIndeksKerentananTB2021_3').style.zIndex = 403;
+        map.getPane('pane_RSTVIIndeksKerentananTB2021_3').style['mix-blend-mode'] = 'normal';
+        var layer_RSTVIIndeksKerentananTB2021_3 = new L.geoJson(json_RSTVIIndeksKerentananTB2021_3, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_RSTVIIndeksKerentananTB2021_3',
+            layerName: 'layer_RSTVIIndeksKerentananTB2021_3',
+            pane: 'pane_RSTVIIndeksKerentananTB2021_3',
+            onEachFeature: pop_RSTVIIndeksKerentananTB2021_3,
+            style: style_RSTVIIndeksKerentananTB2021_3_0,
+        });
+        bounds_group.addLayer(layer_RSTVIIndeksKerentananTB2021_3);
+        map.addLayer(layer_RSTVIIndeksKerentananTB2021_3);
+        function pop_RSTVIIndeksKerentananTB2020_4(feature, layer) {
+            layer.on({
+                mouseout: function (e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">id</th>\
+                        <td class="visible-with-data" id="id">' + (feature.properties['id'] !== null ? autolinker.link(String(feature.properties['id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">kabkot</th>\
+                        <td class="visible-with-data" id="kabkot">' + (feature.properties['kabkot'] !== null ? autolinker.link(String(feature.properties['kabkot']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">kecamatan</th>\
+                        <td class="visible-with-data" id="kecamatan">' + (feature.properties['kecamatan'] !== null ? autolinker.link(String(feature.properties['kecamatan']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">lst</th>\
+                        <td class="visible-with-data" id="lst">' + (feature.properties['lst'] !== null ? autolinker.link(String(feature.properties['lst']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">sentinel_bui</th>\
+                        <td class="visible-with-data" id="sentinel_bui">' + (feature.properties['sentinel_bui'] !== null ? autolinker.link(String(feature.properties['sentinel_bui']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">sentinel_ndvi</th>\
+                        <td class="visible-with-data" id="sentinel_ndvi">' + (feature.properties['sentinel_ndvi'] !== null ? autolinker.link(String(feature.properties['sentinel_ndvi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">sentinel_ndwi</th>\
+                        <td class="visible-with-data" id="sentinel_ndwi">' + (feature.properties['sentinel_ndwi'] !== null ? autolinker.link(String(feature.properties['sentinel_ndwi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">co</th>\
+                        <td class="visible-with-data" id="co">' + (feature.properties['co'] !== null ? autolinker.link(String(feature.properties['co']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">ntl</th>\
+                        <td class="visible-with-data" id="ntl">' + (feature.properties['ntl'] !== null ? autolinker.link(String(feature.properties['ntl']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">slope</th>\
+                        <td class="visible-with-data" id="slope">' + (feature.properties['slope'] !== null ? autolinker.link(String(feature.properties['slope']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">poi_average_distance</th>\
+                        <td class="visible-with-data" id="poi_average_distance">' + (feature.properties['poi_average_distance'] !== null ? autolinker.link(String(feature.properties['poi_average_distance']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">rasio_jml_faskes_per_luas_wilayah</th>\
+                        <td class="visible-with-data" id="rasio_jml_faskes_per_luas_wilayah">' + (feature.properties['rasio_jml_faskes_per_luas_wilayah'] !== null ? autolinker.link(String(feature.properties['rasio_jml_faskes_per_luas_wilayah']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">rasio_jml_faskes_per_10.000penduduk</th>\
+                        <td class="visible-with-data" id="rasio_jml_faskes_per_10.000penduduk">' + (feature.properties['rasio_jml_faskes_per_10.000penduduk'] !== null ? autolinker.link(String(feature.properties['rasio_jml_faskes_per_10.000penduduk']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">pdrb_rwi</th>\
+                        <td class="visible-with-data" id="pdrb_rwi">' + (feature.properties['pdrb_rwi'] !== null ? autolinker.link(String(feature.properties['pdrb_rwi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">kepadatan_penduduk</th>\
+                        <td class="visible-with-data" id="kepadatan_penduduk">' + (feature.properties['kepadatan_penduduk'] !== null ? autolinker.link(String(feature.properties['kepadatan_penduduk']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Indeks</th>\
+                        <td class="visible-with-data" id="Indeks">' + (feature.properties['Indeks'] !== null ? autolinker.link(String(feature.properties['Indeks']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+            layer.on('popupopen', function (e) {
+                addClassToPopupIfMedia(content, e.popup);
+            });
+            layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_RSTVIIndeksKerentananTB2020_4_0(feature) {
+            if (feature.properties['Indeks'] >= 0.000000 && feature.properties['Indeks'] <= 0.200000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2020_4',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(26,150,65,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.200000 && feature.properties['Indeks'] <= 0.400000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2020_4',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(166,217,106,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.400000 && feature.properties['Indeks'] <= 0.600000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2020_4',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(255,255,192,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.600000 && feature.properties['Indeks'] <= 0.800000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2020_4',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(253,174,97,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.800000 && feature.properties['Indeks'] <= 1.000000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2020_4',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(215,25,28,1.0)',
+                    interactive: true,
+                }
+            }
+        }
+        map.createPane('pane_RSTVIIndeksKerentananTB2020_4');
+        map.getPane('pane_RSTVIIndeksKerentananTB2020_4').style.zIndex = 404;
+        map.getPane('pane_RSTVIIndeksKerentananTB2020_4').style['mix-blend-mode'] = 'normal';
+        var layer_RSTVIIndeksKerentananTB2020_4 = new L.geoJson(json_RSTVIIndeksKerentananTB2020_4, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_RSTVIIndeksKerentananTB2020_4',
+            layerName: 'layer_RSTVIIndeksKerentananTB2020_4',
+            pane: 'pane_RSTVIIndeksKerentananTB2020_4',
+            onEachFeature: pop_RSTVIIndeksKerentananTB2020_4,
+            style: style_RSTVIIndeksKerentananTB2020_4_0,
+        });
+        bounds_group.addLayer(layer_RSTVIIndeksKerentananTB2020_4);
+        map.addLayer(layer_RSTVIIndeksKerentananTB2020_4);
+        function pop_RSTVIIndeksKerentananTB2019_5(feature, layer) {
+            layer.on({
+                mouseout: function (e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">id</th>\
+                        <td class="visible-with-data" id="id">' + (feature.properties['id'] !== null ? autolinker.link(String(feature.properties['id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">kabkot</th>\
+                        <td class="visible-with-data" id="kabkot">' + (feature.properties['kabkot'] !== null ? autolinker.link(String(feature.properties['kabkot']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">kecamatan</th>\
+                        <td class="visible-with-data" id="kecamatan">' + (feature.properties['kecamatan'] !== null ? autolinker.link(String(feature.properties['kecamatan']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">lst</th>\
+                        <td class="visible-with-data" id="lst">' + (feature.properties['lst'] !== null ? autolinker.link(String(feature.properties['lst']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">sentinel_bui</th>\
+                        <td class="visible-with-data" id="sentinel_bui">' + (feature.properties['sentinel_bui'] !== null ? autolinker.link(String(feature.properties['sentinel_bui']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">sentinel_ndvi</th>\
+                        <td class="visible-with-data" id="sentinel_ndvi">' + (feature.properties['sentinel_ndvi'] !== null ? autolinker.link(String(feature.properties['sentinel_ndvi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">sentinel_ndwi</th>\
+                        <td class="visible-with-data" id="sentinel_ndwi">' + (feature.properties['sentinel_ndwi'] !== null ? autolinker.link(String(feature.properties['sentinel_ndwi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">co</th>\
+                        <td class="visible-with-data" id="co">' + (feature.properties['co'] !== null ? autolinker.link(String(feature.properties['co']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">ntl</th>\
+                        <td class="visible-with-data" id="ntl">' + (feature.properties['ntl'] !== null ? autolinker.link(String(feature.properties['ntl']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">slope</th>\
+                        <td class="visible-with-data" id="slope">' + (feature.properties['slope'] !== null ? autolinker.link(String(feature.properties['slope']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">poi_average_distance</th>\
+                        <td class="visible-with-data" id="poi_average_distance">' + (feature.properties['poi_average_distance'] !== null ? autolinker.link(String(feature.properties['poi_average_distance']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">rasio_jml_faskes_per_luas_wilayah</th>\
+                        <td class="visible-with-data" id="rasio_jml_faskes_per_luas_wilayah">' + (feature.properties['rasio_jml_faskes_per_luas_wilayah'] !== null ? autolinker.link(String(feature.properties['rasio_jml_faskes_per_luas_wilayah']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">rasio_jml_faskes_per_10.000penduduk</th>\
+                        <td class="visible-with-data" id="rasio_jml_faskes_per_10.000penduduk">' + (feature.properties['rasio_jml_faskes_per_10.000penduduk'] !== null ? autolinker.link(String(feature.properties['rasio_jml_faskes_per_10.000penduduk']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">pdrb_rwi</th>\
+                        <td class="visible-with-data" id="pdrb_rwi">' + (feature.properties['pdrb_rwi'] !== null ? autolinker.link(String(feature.properties['pdrb_rwi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">kepadatan_penduduk</th>\
+                        <td class="visible-with-data" id="kepadatan_penduduk">' + (feature.properties['kepadatan_penduduk'] !== null ? autolinker.link(String(feature.properties['kepadatan_penduduk']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Indeks</th>\
+                        <td class="visible-with-data" id="Indeks">' + (feature.properties['Indeks'] !== null ? autolinker.link(String(feature.properties['Indeks']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+            layer.on('popupopen', function (e) {
+                addClassToPopupIfMedia(content, e.popup);
+            });
+            layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_RSTVIIndeksKerentananTB2019_5_0(feature) {
+            if (feature.properties['Indeks'] >= 0.000000 && feature.properties['Indeks'] <= 0.200000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2019_5',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(26,150,65,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.200000 && feature.properties['Indeks'] <= 0.400000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2019_5',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(166,217,106,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.400000 && feature.properties['Indeks'] <= 0.600000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2019_5',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(255,255,192,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.600000 && feature.properties['Indeks'] <= 0.800000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2019_5',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(253,174,97,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.800000 && feature.properties['Indeks'] <= 1.000000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2019_5',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(215,25,28,1.0)',
+                    interactive: true,
+                }
+            }
+        }
+        map.createPane('pane_RSTVIIndeksKerentananTB2019_5');
+        map.getPane('pane_RSTVIIndeksKerentananTB2019_5').style.zIndex = 405;
+        map.getPane('pane_RSTVIIndeksKerentananTB2019_5').style['mix-blend-mode'] = 'normal';
+        var layer_RSTVIIndeksKerentananTB2019_5 = new L.geoJson(json_RSTVIIndeksKerentananTB2019_5, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_RSTVIIndeksKerentananTB2019_5',
+            layerName: 'layer_RSTVIIndeksKerentananTB2019_5',
+            pane: 'pane_RSTVIIndeksKerentananTB2019_5',
+            onEachFeature: pop_RSTVIIndeksKerentananTB2019_5,
+            style: style_RSTVIIndeksKerentananTB2019_5_0,
+        });
+        bounds_group.addLayer(layer_RSTVIIndeksKerentananTB2019_5);
+        map.addLayer(layer_RSTVIIndeksKerentananTB2019_5);
+        function pop_RSTVIIndeksKerentananTB2018_6(feature, layer) {
+            layer.on({
+                mouseout: function (e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">id</th>\
+                        <td class="visible-with-data" id="id">' + (feature.properties['id'] !== null ? autolinker.link(String(feature.properties['id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">kabkot</th>\
+                        <td class="visible-with-data" id="kabkot">' + (feature.properties['kabkot'] !== null ? autolinker.link(String(feature.properties['kabkot']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">kecamatan</th>\
+                        <td class="visible-with-data" id="kecamatan">' + (feature.properties['kecamatan'] !== null ? autolinker.link(String(feature.properties['kecamatan']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">lst</th>\
+                        <td class="visible-with-data" id="lst">' + (feature.properties['lst'] !== null ? autolinker.link(String(feature.properties['lst']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">sentinel_bui</th>\
+                        <td class="visible-with-data" id="sentinel_bui">' + (feature.properties['sentinel_bui'] !== null ? autolinker.link(String(feature.properties['sentinel_bui']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">sentinel_ndvi</th>\
+                        <td class="visible-with-data" id="sentinel_ndvi">' + (feature.properties['sentinel_ndvi'] !== null ? autolinker.link(String(feature.properties['sentinel_ndvi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">sentinel_ndwi</th>\
+                        <td class="visible-with-data" id="sentinel_ndwi">' + (feature.properties['sentinel_ndwi'] !== null ? autolinker.link(String(feature.properties['sentinel_ndwi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">co</th>\
+                        <td class="visible-with-data" id="co">' + (feature.properties['co'] !== null ? autolinker.link(String(feature.properties['co']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">ntl</th>\
+                        <td class="visible-with-data" id="ntl">' + (feature.properties['ntl'] !== null ? autolinker.link(String(feature.properties['ntl']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">slope</th>\
+                        <td class="visible-with-data" id="slope">' + (feature.properties['slope'] !== null ? autolinker.link(String(feature.properties['slope']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">poi_average_distance</th>\
+                        <td class="visible-with-data" id="poi_average_distance">' + (feature.properties['poi_average_distance'] !== null ? autolinker.link(String(feature.properties['poi_average_distance']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">rasio_jml_faskes_per_luas_wilayah</th>\
+                        <td class="visible-with-data" id="rasio_jml_faskes_per_luas_wilayah">' + (feature.properties['rasio_jml_faskes_per_luas_wilayah'] !== null ? autolinker.link(String(feature.properties['rasio_jml_faskes_per_luas_wilayah']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">rasio_jml_faskes_per_10.000penduduk</th>\
+                        <td class="visible-with-data" id="rasio_jml_faskes_per_10.000penduduk">' + (feature.properties['rasio_jml_faskes_per_10.000penduduk'] !== null ? autolinker.link(String(feature.properties['rasio_jml_faskes_per_10.000penduduk']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">pdrb_rwi</th>\
+                        <td class="visible-with-data" id="pdrb_rwi">' + (feature.properties['pdrb_rwi'] !== null ? autolinker.link(String(feature.properties['pdrb_rwi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">kepadatan_penduduk</th>\
+                        <td class="visible-with-data" id="kepadatan_penduduk">' + (feature.properties['kepadatan_penduduk'] !== null ? autolinker.link(String(feature.properties['kepadatan_penduduk']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Indeks</th>\
+                        <td class="visible-with-data" id="Indeks">' + (feature.properties['Indeks'] !== null ? autolinker.link(String(feature.properties['Indeks']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+            layer.on('popupopen', function (e) {
+                addClassToPopupIfMedia(content, e.popup);
+            });
+            layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_RSTVIIndeksKerentananTB2018_6_0(feature) {
+            if (feature.properties['Indeks'] >= 0.000000 && feature.properties['Indeks'] <= 0.200000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2018_6',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(26,150,65,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.200000 && feature.properties['Indeks'] <= 0.400000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2018_6',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(166,217,106,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.400000 && feature.properties['Indeks'] <= 0.600000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2018_6',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(255,255,192,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.600000 && feature.properties['Indeks'] <= 0.800000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2018_6',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(253,174,97,1.0)',
+                    interactive: true,
+                }
+            }
+            if (feature.properties['Indeks'] >= 0.800000 && feature.properties['Indeks'] <= 1.000000) {
+                return {
+                    pane: 'pane_RSTVIIndeksKerentananTB2018_6',
+                    stroke: false,
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(215,25,28,1.0)',
+                    interactive: true,
+                }
+            }
+        }
+        map.createPane('pane_RSTVIIndeksKerentananTB2018_6');
+        map.getPane('pane_RSTVIIndeksKerentananTB2018_6').style.zIndex = 406;
+        map.getPane('pane_RSTVIIndeksKerentananTB2018_6').style['mix-blend-mode'] = 'normal';
+        var layer_RSTVIIndeksKerentananTB2018_6 = new L.geoJson(json_RSTVIIndeksKerentananTB2018_6, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_RSTVIIndeksKerentananTB2018_6',
+            layerName: 'layer_RSTVIIndeksKerentananTB2018_6',
+            pane: 'pane_RSTVIIndeksKerentananTB2018_6',
+            onEachFeature: pop_RSTVIIndeksKerentananTB2018_6,
+            style: style_RSTVIIndeksKerentananTB2018_6_0,
+        });
+        bounds_group.addLayer(layer_RSTVIIndeksKerentananTB2018_6);
+        map.addLayer(layer_RSTVIIndeksKerentananTB2018_6);
+        function pop_yogyakarta_7(feature, layer) {
+            layer.on({
+                mouseout: function (e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['No'] !== null ? autolinker.link(String(feature.properties['No']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Objek'] !== null ? autolinker.link(String(feature.properties['Objek']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Kode_Kab'] !== null ? autolinker.link(String(feature.properties['Kode_Kab']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Kode_Kec'] !== null ? autolinker.link(String(feature.properties['Kode_Kec']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Provinsi'] !== null ? autolinker.link(String(feature.properties['Provinsi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Kab_Kota'] !== null ? autolinker.link(String(feature.properties['Kab_Kota']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Kecamatan'] !== null ? autolinker.link(String(feature.properties['Kecamatan']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+            layer.on('popupopen', function (e) {
+                addClassToPopupIfMedia(content, e.popup);
+            });
+            layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_yogyakarta_7_0() {
+            return {
+                pane: 'pane_yogyakarta_7',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(196,60,57,0.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_yogyakarta_7');
+        map.getPane('pane_yogyakarta_7').style.zIndex = 407;
+        map.getPane('pane_yogyakarta_7').style['mix-blend-mode'] = 'normal';
+        var layer_yogyakarta_7 = new L.geoJson(json_yogyakarta_7, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_yogyakarta_7',
+            layerName: 'layer_yogyakarta_7',
+            pane: 'pane_yogyakarta_7',
+            onEachFeature: pop_yogyakarta_7,
+            style: style_yogyakarta_7_0,
+        });
+        bounds_group.addLayer(layer_yogyakarta_7);
+        map.addLayer(layer_yogyakarta_7);
+        var osmGeocoder = new L.Control.Geocoder({
+            collapsed: true,
+            position: 'topleft',
+            text: 'Search',
+            title: 'Testing'
+        }).addTo(map);
+        document.getElementsByClassName('leaflet-control-geocoder-icon')[0]
+            .className += ' fa fa-search';
+        document.getElementsByClassName('leaflet-control-geocoder-icon')[0]
+            .title += 'Search for a place';
+        var overlaysTree = [
+            { label: '<img src="legend/yogyakarta_7.png" /> yogyakarta', layer: layer_yogyakarta_7 },
+            { label: 'RSTVI (Indeks Kerentanan TB) 2018', layer: layer_RSTVIIndeksKerentananTB2018_6 },
+            { label: 'RSTVI (Indeks Kerentanan TB) 2019', layer: layer_RSTVIIndeksKerentananTB2019_5 },
+            { label: 'RSTVI (Indeks Kerentanan TB) 2020', layer: layer_RSTVIIndeksKerentananTB2020_4 },
+            { label: 'RSTVI (Indeks Kerentanan TB) 2021', layer: layer_RSTVIIndeksKerentananTB2021_3 },
+            { label: 'RSTVI (Indeks Kerentanan TB) 2022', layer: layer_RSTVIIndeksKerentananTB2022_2 },
+            { label: 'RSTVI (Indeks Kerentanan TB) 2023', layer: layer_RSTVIIndeksKerentananTB2023_1 },
+            //{ label: 'RSTVI (Indeks Kerentanan TB) 2018<br /><table><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2018_6_SangatRendah00020.png" /></td><td>Sangat Rendah (0.0 - 0.2)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2018_6_Rendah02041.png" /></td><td>Rendah (0.2 - 0.4)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2018_6_Sedang04062.png" /></td><td>Sedang (0.4 - 0.6)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2018_6_Tinggi06083.png" /></td><td>Tinggi (0.6 - 0.8)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2018_6_SangatTinggi08104.png" /></td><td>Sangat Tinggi (0.8 - 1.0)</td></tr></table>', layer: layer_RSTVIIndeksKerentananTB2018_6 },
+            //{ label: 'RSTVI (Indeks Kerentanan TB) 2019<br /><table><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2019_5_SangatRendah00020.png" /></td><td>Sangat Rendah (0.0 - 0.2)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2019_5_Rendah02041.png" /></td><td>Rendah (0.2 - 0.4)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2019_5_Sedang04062.png" /></td><td>Sedang (0.4 - 0.6)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2019_5_Tinggi06083.png" /></td><td>Tinggi (0.6 - 0.8)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2019_5_SangatTinggi08104.png" /></td><td>Sangat Tinggi (0.8 - 1.0)</td></tr></table>', layer: layer_RSTVIIndeksKerentananTB2019_5 },
+            //{ label: 'RSTVI (Indeks Kerentanan TB) 2020<br /><table><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2020_4_SangatRendah00020.png" /></td><td>Sangat Rendah (0.0 - 0.2)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2020_4_Rendah02041.png" /></td><td>Rendah (0.2 - 0.4)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2020_4_Sedang04062.png" /></td><td>Sedang (0.4 - 0.6)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2020_4_Tinggi06083.png" /></td><td>Tinggi (0.6 - 0.8)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2020_4_SangatTinggi08104.png" /></td><td>Sangat Tinggi (0.8 - 1.0)</td></tr></table>', layer: layer_RSTVIIndeksKerentananTB2020_4 },
+            //{ label: 'RSTVI (Indeks Kerentanan TB) 2021<br /><table><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2021_3_SangatRendah00020.png" /></td><td>Sangat Rendah (0.0 - 0.2)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2021_3_Rendah02041.png" /></td><td>Rendah (0.2 - 0.4)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2021_3_Sedang04062.png" /></td><td>Sedang (0.4 - 0.6)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2021_3_Tinggi06083.png" /></td><td>Tinggi (0.6 - 0.8)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2021_3_SangatTinggi08104.png" /></td><td>Sangat Tinggi (0.8 - 1.0)</td></tr></table>', layer: layer_RSTVIIndeksKerentananTB2021_3 },
+            //{ label: 'RSTVI (Indeks Kerentanan TB) 2022<br /><table><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2022_2_SangatRendah00020.png" /></td><td>Sangat Rendah (0.0 - 0.2)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2022_2_Rendah02041.png" /></td><td>Rendah (0.2 - 0.4)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2022_2_Sedang04062.png" /></td><td>Sedang (0.4 - 0.6)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2022_2_Tinggi06083.png" /></td><td>Tinggi (0.6 - 0.8)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2022_2_SangatTinggi08104.png" /></td><td>Sangat Tinggi (0.8 - 1.0)</td></tr></table>', layer: layer_RSTVIIndeksKerentananTB2022_2 },
+            //{ label: 'RSTVI (Indeks Kerentanan TB) 2023<br /><table><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2023_1_SangatRendah00020.png" /></td><td>Sangat Rendah (0.0 - 0.2)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2023_1_Rendah02041.png" /></td><td>Rendah (0.2 - 0.4)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2023_1_Sedang04062.png" /></td><td>Sedang (0.4 - 0.6)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2023_1_Tinggi06083.png" /></td><td>Tinggi (0.6 - 0.8)</td></tr><tr><td style="text-align: center;"><img src="legend/RSTVIIndeksKerentananTB2023_1_SangatTinggi08104.png" /></td><td>Sangat Tinggi (0.8 - 1.0)</td></tr></table>', layer: layer_RSTVIIndeksKerentananTB2023_1 },
+            { label: "Google Satellite", layer: layer_GoogleSatellite_0 },]
+        var lay = L.control.layers.tree(null, overlaysTree, {
+            //namedToggle: true,
+            //selectorBack: false,
+            //closedSymbol: '&#8862; &#x1f5c0;',
+            //openedSymbol: '&#8863; &#x1f5c1;',
+            //collapseAll: 'Collapse all',
+            //expandAll: 'Expand all',
+            collapsed: true,
+        });
+        lay.addTo(map);
+        var legendColor = L.control({ position: 'bottomright' });
+
+        legendColor.onAdd = function (map) {
+            var div = L.DomUtil.create('div', 'info legend');
+            div.style.background = 'white';
+            div.style.padding = '10px';
+            div.style.borderRadius = '5px';
+            div.style.boxShadow = '0px 0px 5px rgba(0,0,0,0.5)';
+
+            div.innerHTML += '<b>Keterangan RSTVI (Indeks Kerentanan TB)</b><br>';
+            div.innerHTML += '<img src="legend/RSTVIIndeksKerentananTB2023_1_SangatRendah00020.png" /> Sangat Rendah (0.0 - 0.2)<br>';
+            div.innerHTML += '<img src="legend/RSTVIIndeksKerentananTB2023_1_Rendah02041.png" /> Rendah (0.2 - 0.4)<br>';
+            div.innerHTML += '<img src="legend/RSTVIIndeksKerentananTB2023_1_Sedang04062.png" /> Sedang (0.4 - 0.6)<br>';
+            div.innerHTML += '<img src="legend/RSTVIIndeksKerentananTB2023_1_Tinggi06083.png" /> Tinggi (0.6 - 0.8)<br>';
+            div.innerHTML += '<img src="legend/RSTVIIndeksKerentananTB2023_1_SangatTinggi08104.png" /> Sangat Tinggi (0.8 - 1.0)<br>';
+
+            return div;
+        };
+
+        legendColor.addTo(map);
+        setBounds();
+        map.addControl(new L.Control.Search({
+            layer: layer_RSTVIIndeksKerentananTB2023_1,
+            initial: false,
+            hideMarkerOnCollapse: true,
+            propertyName: 'kecamatan'
+        }));
+        document.getElementsByClassName('search-button')[0].className +=
+            ' fa fa-binoculars';
+    </script>
+</body>
+
+</html>
